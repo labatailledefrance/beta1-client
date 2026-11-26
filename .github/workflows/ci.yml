@@ -1,0 +1,50 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions: {}
+
+jobs:
+  rust:
+    uses: labatailledefrance/.github/.github/workflows/rust.yml@25c52e1c0a35f899fbafabc87e35e0ca8c6cda02 # v1.3.0
+    with:
+      wasm: true
+      wasm-paquet: beta1-client
+    permissions:
+      contents: read
+  securite:
+    uses: labatailledefrance/.github/.github/workflows/securite.yml@25c52e1c0a35f899fbafabc87e35e0ca8c6cda02 # v1.3.0
+    permissions:
+      contents: read
+  codeql:
+    if: github.event.repository.visibility == 'public'
+    uses: labatailledefrance/.github/.github/workflows/codeql.yml@25c52e1c0a35f899fbafabc87e35e0ca8c6cda02 # v1.3.0
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+  dco:
+    if: github.event_name == 'pull_request'
+    uses: labatailledefrance/.github/.github/workflows/dco.yml@25c52e1c0a35f899fbafabc87e35e0ca8c6cda02 # v1.3.0
+    permissions:
+      contents: read
+  # Image : seulement après fusion ou sur un tag (les PR de forks n'ont pas les
+  # secrets de dhi.io), et une fois les secrets posés (variable DHI_PRET).
+  image:
+    if: github.event_name == 'push' && vars.DHI_PRET == 'oui'
+    needs: [rust, securite]
+    uses: labatailledefrance/.github/.github/workflows/image.yml@25c52e1c0a35f899fbafabc87e35e0ca8c6cda02 # v1.3.0
+    with:
+      nom: beta1-client
+    secrets:
+      DHI_USERNAME: ${{ secrets.DHI_USERNAME }}
+      DHI_TOKEN: ${{ secrets.DHI_TOKEN }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write

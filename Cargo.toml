@@ -1,0 +1,46 @@
+[package]
+name = "beta1-client"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.100"
+license = "AGPL-3.0-or-later"
+description = "La Bataille de France, beta 1 : client navigateur (Bevy, WebAssembly, WebGPU)."
+repository = "https://github.com/labatailledefrance/beta1-client"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# Versions exactes, publiées depuis au moins deux semaines.
+[dependencies]
+beta1-common = { version = "=0.1.0", git = "https://github.com/labatailledefrance/beta1-common", tag = "v0.1.0" }
+# Déclaré ici, réduit, pour que les derive de Bevy le trouvent ; la cible wasm32
+# ajoute ci-dessous le rendu (cargo additionne les fonctionnalités).
+bevy = { version = "=0.20.1", default-features = false, features = ["std", "bevy_log"] }
+
+# Le client ne tourne que dans le navigateur : Bevy complet, rendu WebGPU seul
+# (F-04). En natif, seule la logique (module etat) est compilée et testée.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+bevy = { version = "=0.20.1", default-features = false, features = [
+  "std", "async_executor", "bevy_log", "bevy_winit", "web", "webgpu",
+  "2d_bevy_render", "ui_bevy_render", "default_font",
+] }
+wasm-bindgen = "=0.2.130"
+js-sys = "=0.3.107"
+web-sys = { version = "=0.3.107", features = [
+  "BinaryType", "CloseEvent", "Event", "Location", "MessageEvent", "UrlSearchParams", "WebSocket", "Window",
+] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+dbg_macro = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+
+[profile.release]
+opt-level = "s"
+lto = "thin"
+codegen-units = 16
+strip = "debuginfo"
