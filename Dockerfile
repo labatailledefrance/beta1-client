@@ -24,7 +24,7 @@ RUN --mount=type=cache,target=/root/.cargo/registry \
     cargo build --release --locked --target wasm32-unknown-unknown \
  && /outils/bin/wasm-bindgen --target web --no-typescript --remove-name-section --out-dir /dist \
       target/wasm32-unknown-unknown/release/beta1_client.wasm \
- && cp web/index.html web/demarrer.js /dist/
+ && cp web/index.html web/start.js /dist/
 
 FROM dhi.io/nginx:1.31.10-debian13@sha256:bbef6bfb08a559d6ccfa10a37e107204a6c8d21517c06ea07bdf7aefebde0aa8
 COPY web/nginx.conf /etc/nginx/conf.d/default.conf

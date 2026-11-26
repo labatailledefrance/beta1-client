@@ -13,7 +13,7 @@ crate-type = ["cdylib", "rlib"]
 
 # Versions exactes, publiées depuis au moins deux semaines.
 [dependencies]
-beta1-common = { version = "=0.1.0", git = "https://github.com/labatailledefrance/beta1-common", tag = "v0.1.0" }
+beta1-common = { version = "=0.2.0", git = "https://github.com/labatailledefrance/beta1-common", tag = "v0.2.0" }
 # Déclaré ici, réduit, pour que les derive de Bevy le trouvent ; la cible wasm32
 # ajoute ci-dessous le rendu (cargo additionne les fonctionnalités).
 bevy = { version = "=0.20.1", default-features = false, features = ["std", "bevy_log"] }

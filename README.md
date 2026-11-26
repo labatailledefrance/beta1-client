@@ -10,13 +10,13 @@ cargo install --locked wasm-bindgen-cli@0.2.130     # même version que Cargo.lo
 cargo build --release --target wasm32-unknown-unknown
 wasm-bindgen --target web --no-typescript --remove-name-section --out-dir dist \
   target/wasm32-unknown-unknown/release/beta1_client.wasm
-cp web/index.html web/demarrer.js dist/
+cp web/index.html web/start.js dist/
 python3 -m http.server -d dist 8000
 ```
 
-Puis ouvrir `http://127.0.0.1:8000/?serveur=ws://127.0.0.1:7425` (serveur local). Sans paramètre, le client se connecte à `/ws` sur le même hôte.
+Puis ouvrir `http://127.0.0.1:8000/?server=ws://127.0.0.1:7425` (serveur local). Sans paramètre, le client se connecte à `/ws` sur le même hôte.
 
-En natif, seule la logique (`src/etat.rs`) se compile et se teste : `cargo test`.
+En natif, seule la logique (`src/state.rs`) se compile et se teste : `cargo test`.
 
 ## Image
 

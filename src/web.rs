@@ -1,5 +1,5 @@
-//! WebSocket du navigateur. Les rappels JavaScript remplissent une file que
-//! l'application Bevy vide à chaque frame (tout se passe sur le fil principal).
+//! WebSocket du navigateur. Les callbacks JavaScript remplissent une queue que
+//! l'application Bevy vide à chaque frame (tout se passe sur le main thread).
 
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -11,65 +11,70 @@ use wasm_bindgen::prelude::{Closure, JsValue};
 use web_sys::{BinaryType, MessageEvent, WebSocket};
 
 /// Événement réseau.
-pub enum Evenement {
+pub enum NetEvent {
     /// Message binaire reçu.
     Message(Vec<u8>),
     /// Connexion fermée.
-    Ferme,
+    Closed,
 }
 
-/// Rappels JavaScript, gardés vivants tant que la connexion existe.
-struct Rappels {
-    _message: Closure<dyn FnMut(MessageEvent)>,
-    _ferme: Closure<dyn FnMut(JsValue)>,
-    _ouvert: Closure<dyn FnMut(JsValue)>,
+/// Callbacks JavaScript, gardés vivants tant que la connexion existe.
+struct Callbacks {
+    _on_message: Closure<dyn FnMut(MessageEvent)>,
+    _on_close: Closure<dyn FnMut(JsValue)>,
+    _on_open: Closure<dyn FnMut(JsValue)>,
 }
 
 /// Connexion au serveur.
-pub struct Lien {
+pub struct Connection {
     _ws: WebSocket,
-    file: Rc<RefCell<VecDeque<Evenement>>>,
-    _rappels: Rappels,
+    queue: Rc<RefCell<VecDeque<NetEvent>>>,
+    _callbacks: Callbacks,
 }
 
-impl Lien {
-    /// Ouvre la connexion ; `bonjour` est envoyé dès l'ouverture.
-    pub fn ouvrir(url: &str, bonjour: Vec<u8>) -> Result<Lien, JsValue> {
+impl Connection {
+    /// Ouvre la connexion ; `hello` est envoyé dès l'ouverture.
+    pub fn open(url: &str, hello: Vec<u8>) -> Result<Connection, JsValue> {
         let ws = WebSocket::new(url)?;
         ws.set_binary_type(BinaryType::Arraybuffer);
-        let file = Rc::new(RefCell::new(VecDeque::new()));
+        let queue = Rc::new(RefCell::new(VecDeque::new()));
 
-        let f = file.clone();
-        let message = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
+        let q = queue.clone();
+        let on_message = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
             if let Ok(b) = e.data().dyn_into::<ArrayBuffer>() {
-                f.borrow_mut().push_back(Evenement::Message(Uint8Array::new(&b).to_vec()));
+                q.borrow_mut().push_back(NetEvent::Message(Uint8Array::new(&b).to_vec()));
             }
         });
-        let f = file.clone();
-        let ferme = Closure::<dyn FnMut(JsValue)>::new(move |_| f.borrow_mut().push_back(Evenement::Ferme));
+        let q = queue.clone();
+        let on_close = Closure::<dyn FnMut(JsValue)>::new(move |_| q.borrow_mut().push_back(NetEvent::Closed));
         let w = ws.clone();
-        let ouvert = Closure::<dyn FnMut(JsValue)>::new(move |_| {
-            let _ = w.send_with_u8_array(&bonjour);
+        let on_open = Closure::<dyn FnMut(JsValue)>::new(move |_| {
+            let _ = w.send_with_u8_array(&hello);
         });
-        ws.set_onmessage(Some(message.as_ref().unchecked_ref()));
-        ws.set_onclose(Some(ferme.as_ref().unchecked_ref()));
-        ws.set_onopen(Some(ouvert.as_ref().unchecked_ref()));
-        Ok(Lien { _ws: ws, file, _rappels: Rappels { _message: message, _ferme: ferme, _ouvert: ouvert } })
+        ws.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
+        ws.set_onclose(Some(on_close.as_ref().unchecked_ref()));
+        ws.set_onopen(Some(on_open.as_ref().unchecked_ref()));
+        Ok(Connection {
+            _ws: ws,
+            queue,
+            _callbacks: Callbacks { _on_message: on_message, _on_close: on_close, _on_open: on_open },
+        })
     }
 
     /// Événements reçus depuis le dernier appel.
-    pub fn vider(&self) -> Vec<Evenement> {
-        self.file.borrow_mut().drain(..).collect()
+    pub fn drain(&self) -> Vec<NetEvent> {
+        self.queue.borrow_mut().drain(..).collect()
     }
 }
 
-/// Adresse du serveur : `?serveur=ws://…` dans l'URL de la page, sinon `/ws`
-/// sur le même hôte (wss derrière l'ingress).
-pub fn adresse() -> String {
-    let Some(l) = web_sys::window().map(|w| w.location()) else { return "ws://127.0.0.1:7425".to_owned() };
-    if let Some(s) = l.search().ok().and_then(|q| web_sys::UrlSearchParams::new_with_str(&q).ok()?.get("serveur")) {
+/// URL du serveur : `?server=ws://…` dans l'URL de la page, sinon `/ws` sur
+/// le même hôte (wss derrière l'ingress).
+pub fn server_url() -> String {
+    let Some(location) = web_sys::window().map(|w| w.location()) else { return "ws://127.0.0.1:7425".to_owned() };
+    if let Some(s) = location.search().ok().and_then(|q| web_sys::UrlSearchParams::new_with_str(&q).ok()?.get("server"))
+    {
         return s;
     }
-    let schema = if l.protocol().ok().as_deref() == Some("https:") { "wss" } else { "ws" };
-    format!("{schema}://{}/ws", l.host().unwrap_or_default())
+    let scheme = if location.protocol().ok().as_deref() == Some("https:") { "wss" } else { "ws" };
+    format!("{scheme}://{}/ws", location.host().unwrap_or_default())
 }
