@@ -80,9 +80,19 @@ fn entrees(manifeste: &str) -> impl Iterator<Item = &str> {
     manifeste.lines().filter(|l| !l.is_empty() && !l.starts_with("publication ") && !l.starts_with("version "))
 }
 
-/// Départements d'une publication de tiles (`D029 <empreinte>` par ligne).
+/// Départements d'une publication de tiles (`D029 <empreinte>` par ligne) ;
+/// les autres lignes (`graphe <empreinte>`…) ne sont pas des départements.
 pub fn departements(manifeste: &str) -> Vec<String> {
-    entrees(manifeste).filter_map(|l| l.split_whitespace().next()).map(str::to_owned).collect()
+    entrees(manifeste)
+        .filter_map(|l| l.split_whitespace().next())
+        .filter(|d| est_departement(d))
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Code de département du manifeste : `D` puis trois caractères (`D029`, `D02A`, `D974`).
+fn est_departement(d: &str) -> bool {
+    d.len() == 4 && d.starts_with('D') && d[1..].bytes().all(|o| o.is_ascii_digit() || o == b'A' || o == b'B')
 }
 
 /// Nombre de fichiers d'une publication d'assets (`<sha256>  <chemin>` par ligne).
@@ -155,8 +165,8 @@ mod tests {
 
     #[test]
     fn manifestes() {
-        let t = "publication 4cf1f60562e68f79\nversion 0.1.0\nD029 eb1c48\nD974 aa\n";
-        assert_eq!(departements(t), ["D029", "D974"]);
+        let t = "publication 4cf1f60562e68f79\nversion 0.1.0\nD029 eb1c48\nD02A bb\nD974 aa\ngraphe c52bd1a41982396f\n";
+        assert_eq!(departements(t), ["D029", "D02A", "D974"]);
         let a = "publication bf56\nversion 0.1.0\n660b  ATTRIBUTIONS.md\n44aa  modeles/arbre.glb\n";
         assert_eq!(fichiers(a), 2);
     }
