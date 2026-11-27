@@ -78,3 +78,62 @@ pub fn server_url() -> String {
     let scheme = if location.protocol().ok().as_deref() == Some("https:") { "wss" } else { "ws" };
     format!("{scheme}://{}/ws", location.host().unwrap_or_default())
 }
+
+type Reponses<K> = Rc<RefCell<VecDeque<(K, Result<String, String>)>>>;
+type Rappels = Rc<RefCell<Vec<Closure<dyn FnMut(JsValue)>>>>;
+
+/// Requêtes HTTP GET vers le même hôte (`fetch` du navigateur). Comme pour le
+/// WebSocket, les callbacks remplissent une queue vidée à chaque frame.
+pub struct Requetes<K> {
+    reponses: Reponses<K>,
+    // Callbacks gardés vivants jusqu'à la fin de l'application : quelques
+    // requêtes seulement (publications et manifestes).
+    rappels: Rappels,
+}
+
+impl<K: Copy + 'static> Requetes<K> {
+    pub fn new() -> Self {
+        Requetes { reponses: Rc::default(), rappels: Rc::default() }
+    }
+
+    /// Lance `GET url` ; la réponse (texte, ou erreur) arrive avec la clé `cle`.
+    pub fn get(&self, cle: K, url: &str) {
+        let Some(window) = web_sys::window() else {
+            self.reponses.borrow_mut().push_back((cle, Err("pas de fenêtre".to_owned())));
+            return;
+        };
+        let (q, rappels) = (self.reponses.clone(), self.rappels.clone());
+        let sur_reponse = Closure::<dyn FnMut(JsValue)>::new(move |r: JsValue| {
+            let r = match r.dyn_into::<web_sys::Response>() {
+                Ok(r) if r.ok() => r,
+                Ok(r) => return q.borrow_mut().push_back((cle, Err(format!("HTTP {}", r.status())))),
+                Err(_) => return q.borrow_mut().push_back((cle, Err("réponse invalide".to_owned()))),
+            };
+            let texte = match r.text() {
+                Ok(p) => p,
+                Err(e) => return q.borrow_mut().push_back((cle, Err(format!("{e:?}")))),
+            };
+            let q1 = q.clone();
+            let sur_texte = Closure::<dyn FnMut(JsValue)>::new(move |t: JsValue| {
+                q1.borrow_mut().push_back((cle, t.as_string().ok_or_else(|| "texte invalide".to_owned())));
+            });
+            let q2 = q.clone();
+            let sur_erreur = Closure::<dyn FnMut(JsValue)>::new(move |e: JsValue| {
+                q2.borrow_mut().push_back((cle, Err(format!("lecture : {e:?}"))));
+            });
+            let _ = texte.then2(&sur_texte, &sur_erreur);
+            rappels.borrow_mut().extend([sur_texte, sur_erreur]);
+        });
+        let q = self.reponses.clone();
+        let sur_echec = Closure::<dyn FnMut(JsValue)>::new(move |e: JsValue| {
+            q.borrow_mut().push_back((cle, Err(format!("réseau : {e:?}"))));
+        });
+        let _ = window.fetch_with_str(url).then2(&sur_reponse, &sur_echec);
+        self.rappels.borrow_mut().extend([sur_reponse, sur_echec]);
+    }
+
+    /// Réponses reçues depuis le dernier appel.
+    pub fn drain(&self) -> Vec<(K, Result<String, String>)> {
+        self.reponses.borrow_mut().drain(..).collect()
+    }
+}

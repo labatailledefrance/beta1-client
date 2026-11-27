@@ -2,8 +2,10 @@
 //! du serveur et envoie des ordres ; il ne simule rien (F-01).
 //!
 //! - [`state`] : ce que le client sait du serveur (logique pure, testée en natif) ;
+//! - [`donnees`] : publications de tiles et d'assets du serveur de données (logique pure) ;
 //! - `web` et `app` : WebSocket du navigateur et application Bevy (wasm32 seulement).
 
+pub mod donnees;
 pub mod state;
 
 // bevy est déclaré pour toutes les cibles (les derive de Bevy le cherchent là),

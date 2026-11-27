@@ -16,6 +16,12 @@ python3 -m http.server -d dist 8000
 
 Puis ouvrir `http://127.0.0.1:8000/?server=ws://127.0.0.1:7425` (serveur local). Sans paramètre, le client se connecte à `/ws` sur le même hôte.
 
+## Données
+
+Au démarrage, le client lit `/publications.json` sur le même hôte. Ce fichier est servi par le serveur de données du chart `game` ([H-06](https://github.com/labatailledefrance/documentation/blob/main/OPEN-PROBLEMS.md#h-06--diffusion-des-tiles)) et donne les chemins des publications courantes, `/tiles/<id>/` et `/assets/<id>/`. Leur contenu est immuable, donc gardé en cache sans expiration. Le client refuse tout autre chemin ou hôte. Il lit ensuite les deux `MANIFESTE` (départements, nombre de fichiers) et charge la police de l'interface, DotGothic16, depuis la publication d'assets. La racine web de l'AssetServer de Bevy est `assets/`, si bien que `assets.load("<id>/…")` lit `/assets/<id>/…`.
+
+En local, sans serveur de données, la ligne des données affiche l'erreur et le reste fonctionne.
+
 En natif, seule la logique (`src/state.rs`) se compile et se teste : `cargo test`.
 
 ## Image
